@@ -1,0 +1,108 @@
+---
+title: Changelog
+description: Track the latest updates, improvements, and new features released for AccordRx.
+---
+
+## Recent Updates
+
+<Callout kind="info">
+Stay informed about the latest AccordRx releases. Check this changelog regularly for new features, bug fixes, and breaking changes that impact your pharmacy marketplace workflows.
+</Callout>
+
+<Update label="2024-10-15" description="v2.1.0" tags={["feature", "improvement"]}>
+## New Features
+
+- Added bulk listing upload for overstock medications with CSV import support
+- Introduced DSCSA compliance reporting dashboard for serialized drug tracking
+
+## Improvements
+
+- Enhanced search filters for medication categories, expiration dates, and pricing
+- Optimized listing performance, reducing load times by 40%
+
+## Bug Fixes
+
+- Fixed inventory sync issues with external pharmacy management systems
+- Resolved notification delivery failures for order confirmations
+</Update>
+
+<Update label="2024-09-20" description="v2.0.0" tags={["feature", "breaking"]}>
+## New Features
+
+- Launched real-time chat for buyer-seller negotiations on listings
+- Added flat-rate subscription tiers for high-volume pharmacies
+
+## Breaking Changes
+
+- Updated API authentication to require JWT tokens instead of API keys (see migration guide below)
+- Removed legacy endpoint `/v1/listings` in favor of `/v2/inventory`
+
+## Bug Fixes
+
+- Corrected pricing calculation errors in multi-quantity orders
+- Patched security vulnerability in file upload handling
+</Update>
+
+<Update label="2024-08-10" description="v1.9.0" tags={["bugfix", "improvement"]}>
+## Improvements
+
+- Improved mobile responsiveness for listing creation and browsing
+- Added email notifications for expiring overstock alerts
+
+## Bug Fixes
+
+- Fixed order status update delays in the dashboard
+- Resolved payment gateway integration issues with major processors
+</Update>
+
+## Version Summary
+
+| Version | Date       | Key Changes                  | Tags                  |
+|---------|------------|------------------------------|-----------------------|
+| v2.1.0  | 2024-10-15 | Bulk uploads, DSCSA reports  | feature, improvement |
+| v2.0.0  | 2024-09-20 | Real-time chat, JWT auth     | feature, breaking    |
+| v1.9.0  | 2024-08-10 | Mobile UI, notifications     | bugfix, improvement  |
+
+## Upcoming Features
+
+<ExpandableGroup>
+  <Expandable title="Preview: Advanced Analytics (Q4 2024)" default-open="true">
+    Gain insights into your sales trends, popular medications, and supply chain efficiency with interactive charts and exportable reports.
+  </Expandable>
+  <Expandable title="Multi-Location Inventory Sync">
+    Connect multiple pharmacy branches for centralized overstock management.
+  </Expandable>
+</ExpandableGroup>
+
+## Upgrading AccordRx
+
+<Steps>
+  <Step title="Review Changelog" icon="book-open">
+    Check the tags for any `{["breaking"]}` changes that affect your integration.
+  </Step>
+  <Step title="Update API Client" icon="code">
+    <CodeGroup tabs="JavaScript,Python">
+    ````javascript
+    // Old API key auth
+    const response = await fetch('https://api.accordrx.com/v2/listings', {
+      headers: { 'Authorization': `Bearer ${YOUR_JWT_TOKEN}` }
+    });
+    ````
+    ````python
+    import requests
+    response = requests.get('https://api.accordrx.com/v2/listings', 
+                           headers={'Authorization': f'Bearer {YOUR_JWT_TOKEN}'})
+    ````
+    </CodeGroup>
+  </Step>
+  <Step title="Test in Staging" icon="play-circle">
+    Use your staging environment to validate listings and orders.
+  </Step>
+  <Step title="Deploy to Production" icon="rocket">
+    Monitor dashboards for the first 24 hours post-upgrade.
+  </Step>
+</Steps>
+
+<Callout kind="tip" title="Need Help?">
+Contact [support@accordrx.com](mailto:support@accordrx.com) for migration assistance or custom integration support.
+</Callout>

@@ -1,0 +1,153 @@
+---
+title: Managing Your AccordRx Account
+description: Handle your profile, settings, and support needs to optimize your experience on the platform.
+---
+
+## Overview
+
+<Callout kind="info">
+Manage your AccordRx account settings through the dashboard to keep your pharmacy information current, customize notifications, and handle billing efficiently. These configurations ensure smooth operations for buying and selling overstock medications.
+</Callout>
+
+Access your account settings from the dashboard at `https://app.accordrx.com`. Navigate to the user menu (top-right corner) and select `Account Settings`.
+
+<Columns cols={3}>
+  <Card title="Profile" icon="user" href="#profile">
+    Update pharmacy details and contact info.
+  </Card>
+  <Card title="Billing" icon="credit-card" href="#billing">
+    Configure payment methods and preferences.
+  </Card>
+  <Card title="Notifications" icon="bell" href="#notifications">
+    Set alert preferences for transactions.
+  </Card>
+  <Card title="History" icon="history" href="#history">
+    View your transaction records.
+  </Card>
+  <Card title="Support" icon="help-circle" href="#support">
+    Get assistance when needed.
+  </Card>
+</Columns>
+
+## Updating Your Pharmacy Profile
+
+Keep your pharmacy profile accurate to avoid delays in transactions and compliance checks.
+
+<Steps>
+  <Step title="Log In" icon="log-in">
+    Sign in to `https://app.accordrx.com` using your credentials.
+  </Step>
+  <Step title="Navigate to Profile" icon="user">
+    Click your profile icon and select `Edit Profile`.
+  </Step>
+  <Step title="Update Details">
+    Enter your pharmacy name, address, NPI number, and contact email/phone.
+    
+    Example fields:
+    
+    | Field          | Example Value                  |
+    |----------------|--------------------------------|
+    | Pharmacy Name  | Madison Family Pharmacy        |
+    | Address        | 123 Main St, Madison, WI 53703 |
+    | NPI            | 1234567890                     |
+    | Phone          | (608) 555-0123                 |
+  </Step>
+  <Step title="Save Changes" icon="save">
+    Review and click `Update Profile`. Confirm via email if prompted.
+  </Step>
+</Steps>
+
+<Callout kind="tip">
+Verify your NPI and address match official records to comply with DSCSA requirements.
+</Callout>
+
+## Configuring Preferences
+
+Customize your account to match your workflow.
+
+<Tabs>
+  <Tab title="Payment & Billing" icon="credit-card">
+
+    <Steps>
+      <Step title="Add Payment Method">
+        Go to `Billing` tab and select `Add Card`.
+        
+````html
+Credit Card: **** **** **** 1234
+Expires: 12/2026
+CVV: ***
+````
+        
+      </Step>
+      <Step title="Set Billing Preferences">
+        Choose auto-pay or manual invoicing.
+        
+        Available options:
+        
+        | Preference     | Description                          |
+        |----------------|--------------------------------------|
+        | Auto-Pay       | Charges flat-rate fee monthly        |
+        | Manual         | Receive invoice via email            |
+        | Currency       | USD (default)                        |
+      </Step>
+    </Steps>
+
+  </Tab>
+  <Tab title="Notifications" icon="bell">
+
+    Manage alerts for listings, sales, and low stock.
+
+    <Expandable title="Email Preferences" default-open="true">
+      - Transaction confirmations: Enabled by default
+      - Price alerts: Set thresholds (e.g., `<{threshold}` for buys)
+      - Weekly summaries: Opt-in
+      
+      Update via `Notifications > Email`.
+    </Expandable>
+
+    <Expandable title="In-App Alerts">
+      - Push notifications for mobile app
+      - Browser alerts for dashboard activity
+    </Expandable>
+
+  </Tab>
+</Tabs>
+
+## Accessing Transaction History
+
+Review your buy/sell activity for reporting and audits.
+
+<Steps>
+  <Step title="Open History" icon="history">
+    From dashboard, select `Transactions`.
+  </Step>
+  <Step title="Filter Records">
+    Use filters:
+    
+    | Filter Type    | Options                     |
+    |----------------|-----------------------------|
+    | Date Range     | Last 30 days, Custom        |
+    | Type           | Buy, Sell, Transfer         |
+    | Status         | Completed, Pending, Failed  |
+  </Step>
+  <Step title="Export Data">
+    Download CSV for accounting software.
+  </Step>
+</Steps>
+
+## Contacting Support
+
+For assistance, reach out via these channels.
+
+<Columns cols={2}>
+  <Card title="Email Support" icon="mail" href="mailto:support@accordrx.com">
+    Describe your issue in detail. Response within 24 hours.
+  </Card>
+  <Card title="Help Center" icon="help-circle" href="https://docs.accordrx.com/help-center">
+    Search FAQs and guides.
+  </Card>
+</Columns>
+
+<Callout kind="alert">
+If experiencing urgent issues like failed transactions, include transaction ID and screenshots.
+</Callout>
