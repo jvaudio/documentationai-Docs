@@ -1,103 +1,2334 @@
-openapi: '3.0.0'
+openapi: "3.0.3"
+
 info:
-  version: 1.0.0
-  title: Accordrx API
+  title: AccordRx API
+  version: "1.0.0"
+  description: |
+    REST API for the AccordRx pharmaceutical marketplace.
+    Covers product search, catalog, cart, checkout, and customer account management.
+
+    ## Authentication
+    - **Bearer (Sanctum):** Personal access token required for admin-only endpoints (`GET /api/user`, `GET /api/search/customers`).
+    - **Customer session:** Session cookie obtained after `POST /api/customer/login`. Required for address and wishlist endpoints.
+    - Most endpoints are **unauthenticated** (public storefront).
   license:
-    name: MIT
+    name: Proprietary
+    url: https://accordrx.com
+
 servers:
-  - url: http://api.accordrx.com/v1
-paths:
-  /documents:
-    get:
-      summary: List documents
-      operationId: listDocuments
-      parameters:
-        - name: limit
-          in: query
-          description: How many items to return at one time (max 100)
-          required: false
-          schema:
-            type: integer
-            format: int32
-      responses:
-        200:
-          description: An paged array of documents
-          headers:
-            x-next:
-              description: A link to the next page of responses
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documents'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    post:
-      summary: Create document
-      operationId: createDocument
-      responses:
-        201:
-          description: Null response
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /documents/{documentId}:
-    get:
-      summary: Get document
-      operationId: getDocumentById
-      parameters:
-        - name: documentId
-          in: path
-          required: true
-          description: The id of the document to retrieve
-          schema:
-            type: string
-      responses:
-        200:
-          description: Expected response to a valid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documents'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+  - url: https://accordrx-main-vvpwis.laravel.cloud
+    description: Production
+  - url: http://accordrx.test
+    description: Local (Laravel Herd)
+
+# All endpoints are public by default; individual operations override where auth is required.
+security: []
+
+tags:
+  - name: Auth
+    description: Sanctum user identity
+  - name: Search
+    description: Algolia-powered search across products, sellers, and customers
+  - name: Core
+    description: Reference data — countries and states
+  - name: Categories
+    description: Product category tree and filterable attributes
+  - name: Products
+    description: Product listings, related, and up-sell products
+  - name: Reviews
+    description: Product reviews, submission, and AI translation
+  - name: Compare
+    description: Product comparison list
+  - name: Cart
+    description: Shopping cart management
+  - name: Checkout
+    description: One-page checkout — addresses, shipping, payment, and order placement
+  - name: Customer
+    description: Customer authentication
+  - name: Addresses
+    description: Saved customer addresses (requires customer session)
+  - name: Wishlist
+    description: Customer wishlist management (requires customer session)
+
+# ---------------------------------------------------------------------------
+# Security Schemes
+# ---------------------------------------------------------------------------
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Laravel Sanctum personal access token. Used for `GET /api/user` and `GET /api/search/customers`.
+    customerSession:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+      description: Customer session cookie set after a successful `POST /api/customer/login`.
+
+  # -------------------------------------------------------------------------
+  # Reusable Responses
+  # -------------------------------------------------------------------------
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthenticated:
+      description: Unauthenticated — missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden — insufficient permissions or business rule violation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------------------------------------------------------
+  # Reusable Schemas
+  # -------------------------------------------------------------------------
   schemas:
-    Document:
-      required:
-        - id
-        - title
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        last_page:
+          type: integer
+          example: 8
+
+    SuccessListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items: {}
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Operation successful."
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "An error occurred."
+
+    Product:
+      type: object
       properties:
         id:
           type: integer
-          format: int64
+          example: 42
+        sku:
+          type: string
+          example: "AMOX-500-30"
+        name:
+          type: string
+          example: "Amoxicillin 500mg"
+        price:
+          type: number
+          format: float
+          example: 12.99
+        url_key:
+          type: string
+          example: "amoxicillin-500mg"
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              url:
+                type: string
+                format: uri
+
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 7
+        product_id:
+          type: integer
+          example: 42
+        sku:
+          type: string
+          example: "AMOX-500-30"
+        name:
+          type: string
+          example: "Amoxicillin 500mg"
+        quantity:
+          type: integer
+          example: 2
+        price:
+          type: number
+          format: float
+          example: 12.99
+        total:
+          type: number
+          format: float
+          example: 25.98
+
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        items_count:
+          type: integer
+          example: 2
+        items_qty:
+          type: integer
+          example: 3
+        coupon_code:
+          type: string
+          nullable: true
+          example: "SAVE10"
+        discount_amount:
+          type: number
+          format: float
+          example: 5.00
+        subtotal:
+          type: number
+          format: float
+          example: 38.97
+        grand_total:
+          type: number
+          format: float
+          example: 33.97
+
+    Address:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        company_name:
+          type: string
+          nullable: true
+          example: "Acme Pharmacy"
+        first_name:
+          type: string
+          example: "Jane"
+        last_name:
+          type: string
+          example: "Doe"
+        email:
+          type: string
+          format: email
+          example: "jane.doe@example.com"
+        address:
+          type: string
+          example: "123 Main St"
+        city:
+          type: string
+          example: "Springfield"
+        state:
+          type: string
+          example: "IL"
+        postcode:
+          type: string
+          example: "62701"
+        country:
+          type: string
+          example: "US"
+        phone:
+          type: string
+          example: "+1-555-000-1234"
+        default_address:
+          type: boolean
+          example: true
+
+    AddressInput:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - email
+        - address
+        - city
+        - phone
+      properties:
+        company_name:
+          type: string
+          nullable: true
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        vat_id:
+          type: string
+          nullable: true
+        address:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          example: ["123 Main St", "Apt 4B"]
+        city:
+          type: string
+        state:
+          type: string
+          nullable: true
+        postcode:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+          example: "US"
+        phone:
+          type: string
+        default_address:
+          type: boolean
+          default: false
+
+    WishlistItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        product_id:
+          type: integer
+          example: 42
+        product:
+          $ref: "#/components/schemas/Product"
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 9
         title:
           type: string
-        category:
+          example: "Works great"
+        comment:
           type: string
-    Documents:
-      type: array
-      items:
-        $ref: '#/components/schemas/Document'
-    Error:
-      required:
-        - code
-        - message
-      properties:
-        code:
+          example: "Excellent product, highly recommend."
+        rating:
           type: integer
-          format: int32
-        message:
+          minimum: 1
+          maximum: 5
+          example: 5
+        name:
           type: string
+          example: "J*** D***"
+        status:
+          type: string
+          enum: [approved, pending]
+          example: "approved"
+        created_at:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: "Antibiotics"
+        slug:
+          type: string
+          example: "antibiotics"
+        image:
+          type: string
+          format: uri
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+
+    Country:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: "US"
+        name:
+          type: string
+          example: "United States"
+
+    Suggestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        text:
+          type: string
+          example: "Amoxicillin 500mg"
+        type:
+          type: string
+          enum: [product, seller, customer]
+          example: "product"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Admin User"
+        email:
+          type: string
+          format: email
+          example: "admin@accordrx.com"
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # --------------------------------------------------------------------------
+  # Auth
+  # --------------------------------------------------------------------------
+
+  /api/user:
+    get:
+      operationId: getAuthenticatedUser
+      tags: [Auth]
+      summary: Get authenticated user
+      description: Returns the Sanctum-authenticated user (admin/API token context).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Authenticated user object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  # --------------------------------------------------------------------------
+  # Search
+  # --------------------------------------------------------------------------
+
+  /api/search/products:
+    get:
+      operationId: searchProducts
+      tags: [Search]
+      summary: Search products (Algolia)
+      description: Full-text product search powered by Algolia with optional filters.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "amoxicillin"
+        - name: "filters[category_ids][]"
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by category IDs
+        - name: "filters[price_range][min]"
+          in: query
+          schema:
+            type: number
+          description: Minimum price filter
+        - name: "filters[price_range][max]"
+          in: query
+          schema:
+            type: number
+          description: Maximum price filter
+        - name: "filters[in_stock]"
+          in: query
+          schema:
+            type: boolean
+          description: Only return in-stock products
+        - name: "filters[status]"
+          in: query
+          schema:
+            type: integer
+            enum: [0, 1]
+          description: Product status filter (1 = enabled)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          example: 20
+      responses:
+        "200":
+          description: Paginated product results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessListResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Product"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/search/customers:
+    get:
+      operationId: searchCustomers
+      tags: [Search]
+      summary: Search customers (admin)
+      description: Full-text customer search via Algolia. Requires a Sanctum bearer token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "john doe"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated customer results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/search/sellers:
+    get:
+      operationId: searchSellers
+      tags: [Search]
+      summary: Search sellers (Algolia)
+      description: Full-text seller search with optional filters.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "downtown pharmacy"
+        - name: "filters[country]"
+          in: query
+          schema:
+            type: string
+          example: "US"
+        - name: "filters[state]"
+          in: query
+          schema:
+            type: string
+          example: "IL"
+        - name: "filters[min_products]"
+          in: query
+          schema:
+            type: integer
+          description: Minimum number of products the seller must have
+        - name: "filters[is_approved]"
+          in: query
+          schema:
+            type: boolean
+          description: Only return approved sellers
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated seller results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessListResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/search/suggestions:
+    get:
+      operationId: getSearchSuggestions
+      tags: [Search]
+      summary: Autocomplete suggestions
+      description: Returns a short list of name suggestions for the given query and resource type.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "amox"
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [products, sellers, customers]
+          example: "products"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+          example: 5
+      responses:
+        "200":
+          description: List of suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  suggestions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Suggestion"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/search/global:
+    get:
+      operationId: globalSearch
+      tags: [Search]
+      summary: Global cross-resource search
+      description: Searches products and sellers simultaneously and returns grouped results.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: "amoxicillin"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+          example: 10
+      responses:
+        "200":
+          description: Grouped search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  results:
+                    type: object
+                    properties:
+                      products:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                              example: "product"
+                            url:
+                              type: string
+                              format: uri
+                      sellers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                            type:
+                              type: string
+                              example: "seller"
+                            url:
+                              type: string
+                              format: uri
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # --------------------------------------------------------------------------
+  # Core
+  # --------------------------------------------------------------------------
+
+  /api/core/countries:
+    get:
+      operationId: getCountries
+      tags: [Core]
+      summary: List all countries
+      description: Returns all countries available in the system.
+      responses:
+        "200":
+          description: List of countries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Country"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/core/states:
+    get:
+      operationId: getStates
+      tags: [Core]
+      summary: List states grouped by country
+      description: Returns states/provinces grouped by their country code.
+      responses:
+        "200":
+          description: States grouped by country code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    description: Keys are country codes (e.g. "US"), values are arrays of state objects.
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          code:
+                            type: string
+                            example: "IL"
+                          name:
+                            type: string
+                            example: "Illinois"
+                          country_code:
+                            type: string
+                            example: "US"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # --------------------------------------------------------------------------
+  # Categories
+  # --------------------------------------------------------------------------
+
+  /api/categories:
+    get:
+      operationId: listCategories
+      tags: [Categories]
+      summary: List categories (paginated)
+      description: Returns enabled categories for the current locale. Accepts Bagisto repository filter params.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: integer
+            enum: [0, 1]
+          example: 1
+        - name: locale
+          in: query
+          schema:
+            type: string
+          example: "en"
+        - name: parent_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by parent category ID
+      responses:
+        "200":
+          description: Collection of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/categories/tree:
+    get:
+      operationId: getCategoryTree
+      tags: [Categories]
+      summary: Full category tree
+      description: Returns the entire visible category tree rooted at the current channel's root category.
+      responses:
+        "200":
+          description: Nested category tree
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/categories/attributes:
+    get:
+      operationId: getCategoryAttributes
+      tags: [Categories]
+      summary: Filterable attributes for a category
+      description: Returns filterable product attributes. If `category_id` is given, returns category-specific attributes; otherwise returns global filterable attributes.
+      parameters:
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+          description: Category ID to scope the attribute list
+      responses:
+        "200":
+          description: List of filterable attributes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        code:
+                          type: string
+                          example: "size"
+                        type:
+                          type: string
+                          example: "select"
+                        name:
+                          type: string
+                          example: "Size"
+                        options:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                              label:
+                                type: string
+                              sort_order:
+                                type: integer
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/categories/max-price/{id}:
+    get:
+      operationId: getCategoryMaxPrice
+      tags: [Categories]
+      summary: Maximum product price in category
+      description: Returns the highest product price within the specified category. Omit `{id}` for the global maximum.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Category ID.
+          example: 5
+      responses:
+        "200":
+          description: Maximum price in the category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  max_price:
+                    type: number
+                    format: float
+                    example: 299.99
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --------------------------------------------------------------------------
+  # Products
+  # --------------------------------------------------------------------------
+
+  /api/products:
+    get:
+      operationId: listProducts
+      tags: [Products]
+      summary: List / filter products
+      description: |
+        Returns a paginated collection of products. Supports two search modes:
+        - `q` — quick text search against attribute values (Eloquent LIKE)
+        - `query` — full Bagisto repository search (may use Elasticsearch depending on configuration)
+
+        Common filter params: `category_id`, `sort`, `mode`, `limit`, `query`.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Quick text search against product attribute values
+        - name: query
+          in: query
+          schema:
+            type: string
+          description: Bagisto repository full-text search term
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by category
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [price-asc, price-desc, created_at-desc, name-asc]
+          description: Sort order
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [grid, list]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          example: 12
+          description: Results per page
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Paginated product collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/products/{id}/related:
+    get:
+      operationId: getRelatedProducts
+      tags: [Products]
+      summary: Related products
+      description: Returns products related to the given product (configured in admin).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+      responses:
+        "200":
+          description: Related product collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/products/{id}/up-sell:
+    get:
+      operationId: getUpSellProducts
+      tags: [Products]
+      summary: Up-sell products
+      description: Returns up-sell product suggestions for the given product.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+      responses:
+        "200":
+          description: Up-sell product collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --------------------------------------------------------------------------
+  # Reviews
+  # --------------------------------------------------------------------------
+
+  /api/product/{id}/reviews:
+    get:
+      operationId: listProductReviews
+      tags: [Reviews]
+      summary: List reviews for a product
+      description: Returns paginated approved reviews for the given product (8 per page).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Paginated review collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Review"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/product/{id}/review:
+    post:
+      operationId: createProductReview
+      tags: [Reviews]
+      summary: Submit a product review
+      description: |
+        Creates a new product review with optional media attachments.
+        Submitted reviews start with `pending` status and require admin approval.
+        Uses `multipart/form-data` to support file uploads.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - comment
+                - rating
+              properties:
+                title:
+                  type: string
+                  example: "Great product"
+                comment:
+                  type: string
+                  example: "Worked exactly as expected."
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                name:
+                  type: string
+                  description: Reviewer display name. Defaults to authenticated customer name.
+                  example: "Jane D."
+                "attachments[]":
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Optional image or video attachments (image/*, video/*).
+      responses:
+        "200":
+          description: Review submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/product/{id}/reviews/{review_id}/translate:
+    get:
+      operationId: translateProductReview
+      tags: [Reviews]
+      summary: Translate review text
+      description: |
+        Translates the review comment into the current store locale using MagicAI.
+        Requires MagicAI to be configured in admin settings.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+        - name: review_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 9
+      responses:
+        "200":
+          description: Translated review content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                    example: "Excelente producto, muy recomendado."
+        "500":
+          description: Translation service error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # --------------------------------------------------------------------------
+  # Compare
+  # --------------------------------------------------------------------------
+
+  /api/compare-items:
+    get:
+      operationId: listCompareItems
+      tags: [Compare]
+      summary: List compare items
+      description: |
+        Returns the product comparison list.
+        For authenticated customers, the server loads from their saved list.
+        For guests, pass `product_ids[]` as query parameters.
+      parameters:
+        - name: "product_ids[]"
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Guest compare list — product IDs to compare (ignored for authenticated customers)
+      responses:
+        "200":
+          description: Products in the comparison list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    post:
+      operationId: addCompareItem
+      tags: [Compare]
+      summary: Add item to compare
+      description: Adds a product to the authenticated customer's comparison list. Requires customer session.
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+              properties:
+                product_id:
+                  type: integer
+                  example: 42
+      responses:
+        "200":
+          description: Product added to comparison list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          description: Product already in compare list or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: removeCompareItem
+      tags: [Compare]
+      summary: Remove item from compare
+      description: Removes a specific product from the authenticated customer's comparison list.
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+              properties:
+                product_id:
+                  type: integer
+                  example: 42
+      responses:
+        "200":
+          description: Product removed; returns updated comparison list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+                  message:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/compare-items/all:
+    delete:
+      operationId: clearCompareItems
+      tags: [Compare]
+      summary: Clear all compare items
+      description: Removes all products from the authenticated customer's comparison list.
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: All compare items removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  # --------------------------------------------------------------------------
+  # Cart
+  # --------------------------------------------------------------------------
+
+  /api/checkout/cart:
+    get:
+      operationId: getCart
+      tags: [Cart]
+      summary: Get current cart
+      description: Returns the current session cart with all items and totals.
+      responses:
+        "200":
+          description: Current cart (null data when cart is empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    nullable: true
+                    type: object
+                    description: CartResource object, or null when the session has no active cart
+                  message:
+                    type: string
+                    description: Optional informational message from session flash
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: addToCart
+      tags: [Cart]
+      summary: Add product to cart
+      description: |
+        Adds a product to the cart. For configurable products, pass additional
+        product configuration (e.g. `super_attribute`, `quantity`).
+        Set `is_buy_now=true` to clear the cart and go straight to checkout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+              properties:
+                product_id:
+                  type: integer
+                  example: 42
+                quantity:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                  example: 2
+                is_buy_now:
+                  type: boolean
+                  default: false
+                  description: Deactivate the existing cart and redirect to checkout immediately
+                super_attribute:
+                  type: object
+                  description: For configurable products — attribute_id to option_id mapping
+                  additionalProperties:
+                    type: integer
+                  example:
+                    "23": 5
+      responses:
+        "200":
+          description: Item added; returns updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+                  redirect:
+                    type: string
+                    format: uri
+                    description: Present only when is_buy_now=true
+        "400":
+          description: Product unavailable or cart error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect_uri:
+                    type: string
+                    format: uri
+                  message:
+                    type: string
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    put:
+      operationId: updateCart
+      tags: [Cart]
+      summary: Update cart item quantities
+      description: |
+        Updates quantities for one or more cart items.
+        Send a `qty` object where keys are cart item IDs and values are the desired quantities.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qty:
+                  type: object
+                  description: Map of cart_item_id to desired quantity
+                  additionalProperties:
+                    type: integer
+                  example:
+                    "7": 3
+                    "8": 1
+      responses:
+        "200":
+          description: Cart updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      operationId: removeFromCart
+      tags: [Cart]
+      summary: Remove item from cart
+      description: Removes a single item from the cart by its cart item ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cart_item_id
+              properties:
+                cart_item_id:
+                  type: integer
+                  description: The ID of the cart item to remove (from `cart_items` table)
+                  example: 7
+      responses:
+        "200":
+          description: Item removed; returns updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/cart/selected:
+    delete:
+      operationId: removeSelectedFromCart
+      tags: [Cart]
+      summary: Remove selected cart items
+      description: Removes multiple cart items by their IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  example: [7, 8]
+      responses:
+        "200":
+          description: Selected items removed; returns updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    nullable: true
+                    type: object
+                    description: Updated CartResource, or null if the cart is now empty
+                  message:
+                    type: string
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/cart/move-to-wishlist:
+    post:
+      operationId: moveCartItemsToWishlist
+      tags: [Cart]
+      summary: Move cart items to wishlist
+      description: Moves specified cart items to the customer wishlist. The `ids` and `qty` arrays must be parallel.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+                - qty
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Cart item IDs to move
+                  example: [7, 8]
+                qty:
+                  type: array
+                  items:
+                    type: integer
+                  description: Quantities corresponding to each item ID (parallel array)
+                  example: [2, 1]
+      responses:
+        "200":
+          description: Items moved to wishlist; returns updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    nullable: true
+                    type: object
+                    description: Updated CartResource, or null if the cart is now empty
+                  message:
+                    type: string
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/cart/coupon:
+    post:
+      operationId: applyCoupon
+      tags: [Cart]
+      summary: Apply coupon code
+      description: Applies a cart rule coupon code to the current session cart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  example: "SAVE10"
+      responses:
+        "200":
+          description: Coupon applied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+        "422":
+          description: Coupon not found or already applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+
+    delete:
+      operationId: removeCoupon
+      tags: [Cart]
+      summary: Remove coupon code
+      description: Removes the currently applied coupon code from the cart.
+      responses:
+        "200":
+          description: Coupon removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/checkout/cart/estimate-shipping-methods:
+    post:
+      operationId: estimateShippingMethods
+      tags: [Cart]
+      summary: Estimate shipping rates
+      description: |
+        Calculates available shipping methods and rates for a given destination address.
+        Optionally saves a selected shipping method to the cart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - country
+                - state
+                - postcode
+              properties:
+                country:
+                  type: string
+                  example: "US"
+                state:
+                  type: string
+                  example: "IL"
+                postcode:
+                  type: string
+                  example: "62701"
+                shipping_method:
+                  type: string
+                  description: Optional — if provided, saves this method to the cart immediately
+                  example: "flatrate_flatrate"
+      responses:
+        "200":
+          description: Available shipping methods with updated cart totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      cart:
+                        $ref: "#/components/schemas/Cart"
+                      shipping_methods:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                              example: "flatrate"
+                            title:
+                              type: string
+                              example: "Flat Rate"
+                            rates:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  code:
+                                    type: string
+                                    example: "flatrate_flatrate"
+                                  title:
+                                    type: string
+                                    example: "Fixed"
+                                  price:
+                                    type: number
+                                    format: float
+                                    example: 5.00
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/cart/cross-sell:
+    get:
+      operationId: getCartCrossSell
+      tags: [Cart]
+      summary: Cross-sell products for current cart
+      description: Returns products that are cross-sold with items currently in the cart.
+      responses:
+        "200":
+          description: Cross-sell product collection (empty when cart is empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # --------------------------------------------------------------------------
+  # Checkout
+  # --------------------------------------------------------------------------
+
+  /api/checkout/onepage/summary:
+    get:
+      operationId: getCheckoutSummary
+      tags: [Checkout]
+      summary: Checkout cart summary
+      description: Returns the current cart in checkout context (same CartResource as cart index).
+      responses:
+        "200":
+          description: Cart summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/checkout/onepage/addresses:
+    post:
+      operationId: saveCheckoutAddress
+      tags: [Checkout]
+      summary: Save checkout address(es)
+      description: |
+        Saves billing and optionally separate shipping address(es) to the cart.
+        If `billing.use_for_shipping` is `true`, the billing address is also used as the shipping address.
+
+        Returns available shipping rates (for physical products) or payment methods (for digital-only orders).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - billing
+              properties:
+                billing:
+                  type: object
+                  required:
+                    - first_name
+                    - last_name
+                    - email
+                    - address
+                    - city
+                    - phone
+                  properties:
+                    company_name:
+                      type: string
+                      nullable: true
+                    first_name:
+                      type: string
+                      example: "Jane"
+                    last_name:
+                      type: string
+                      example: "Doe"
+                    email:
+                      type: string
+                      format: email
+                      example: "jane@example.com"
+                    address:
+                      type: array
+                      items:
+                        type: string
+                      minItems: 1
+                      example: ["123 Main St"]
+                    city:
+                      type: string
+                      example: "Springfield"
+                    state:
+                      type: string
+                      nullable: true
+                      example: "IL"
+                    postcode:
+                      type: string
+                      nullable: true
+                      example: "62701"
+                    country:
+                      type: string
+                      nullable: true
+                      example: "US"
+                    phone:
+                      type: string
+                      example: "+1-555-000-1234"
+                    use_for_shipping:
+                      type: boolean
+                      default: true
+                      description: When true, the billing address is also used for shipping
+                shipping:
+                  type: object
+                  description: Required when `billing.use_for_shipping` is false
+                  properties:
+                    company_name:
+                      type: string
+                      nullable: true
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
+                    email:
+                      type: string
+                      format: email
+                    address:
+                      type: array
+                      items:
+                        type: string
+                      minItems: 1
+                    city:
+                      type: string
+                    state:
+                      type: string
+                      nullable: true
+                    postcode:
+                      type: string
+                      nullable: true
+                    country:
+                      type: string
+                      nullable: true
+                    phone:
+                      type: string
+      responses:
+        "200":
+          description: |
+            Address saved. Returns shipping rates when cart has physical products,
+            or payment methods when cart is digital-only.
+            Also returns redirect info if customer login is required or cart has errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect:
+                    type: boolean
+                  data:
+                    description: Shipping rates object or payment methods array or redirect URL string
+                  redirect_url:
+                    type: string
+                    format: uri
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/onepage/shipping-methods:
+    post:
+      operationId: selectShippingMethod
+      tags: [Checkout]
+      summary: Select shipping method
+      description: Saves the chosen shipping method to the cart and returns available payment methods.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shipping_method
+              properties:
+                shipping_method:
+                  type: string
+                  description: Shipping method code in `carrier_method` format
+                  example: "flatrate_flatrate"
+      responses:
+        "200":
+          description: Shipping method saved; returns available payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    method:
+                      type: string
+                      example: "cashondelivery"
+                    method_title:
+                      type: string
+                      example: "Cash On Delivery"
+                    sort:
+                      type: integer
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/onepage/payment-methods:
+    post:
+      operationId: selectPaymentMethod
+      tags: [Checkout]
+      summary: Select payment method
+      description: Saves the chosen payment method to the cart and returns the updated cart summary.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment
+              properties:
+                payment:
+                  type: object
+                  required:
+                    - method
+                  properties:
+                    method:
+                      type: string
+                      example: "cashondelivery"
+                    additional:
+                      type: object
+                      description: Payment-method-specific additional data
+      responses:
+        "200":
+          description: Payment method saved; returns updated cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart:
+                    $ref: "#/components/schemas/Cart"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/checkout/onepage/orders:
+    post:
+      operationId: placeOrder
+      tags: [Checkout]
+      summary: Place the order
+      description: |
+        Validates and places the order from the current session cart.
+        The cart must have billing/shipping addresses, a shipping method (for physical products), and a payment method set.
+        On success, returns a redirect URL to the order success page.
+        For payment gateways that require an external redirect (e.g. PayPal), returns that redirect URL instead.
+      requestBody:
+        description: No body required — the order is placed from the current session cart.
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Order placed (or redirect required for payment gateway)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect:
+                    type: boolean
+                    example: true
+                  redirect_url:
+                    type: string
+                    format: uri
+                    example: "https://accordrx-main-vvpwis.laravel.cloud/checkout/onepage/success"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          description: Order validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # --------------------------------------------------------------------------
+  # Customer
+  # --------------------------------------------------------------------------
+
+  /api/customer/login:
+    post:
+      operationId: customerLogin
+      tags: [Customer]
+      summary: Customer login
+      description: |
+        Authenticates a customer using email and password.
+        On success, the server sets a `laravel_session` cookie which must be
+        included in subsequent customer-authenticated requests.
+        The response body is an empty JSON object `{}` on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "jane.doe@example.com"
+                password:
+                  type: string
+                  minLength: 6
+                  format: password
+                  example: "secret123"
+      responses:
+        "200":
+          description: Login successful — session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: laravel_session cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Empty object on success
+        "403":
+          description: Invalid credentials, inactive account, or email not verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # --------------------------------------------------------------------------
+  # Addresses (requires customer session)
+  # --------------------------------------------------------------------------
+
+  /api/customer/addresses:
+    get:
+      operationId: listAddresses
+      tags: [Addresses]
+      summary: List saved addresses
+      description: Returns all saved addresses for the authenticated customer.
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: Customer address collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Address"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+    post:
+      operationId: createAddress
+      tags: [Addresses]
+      summary: Create a new address
+      description: Creates a new saved address for the authenticated customer.
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+      responses:
+        "200":
+          description: Address created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/customer/addresses/edit/{id}:
+    put:
+      operationId: updateAddress
+      tags: [Addresses]
+      summary: Update a saved address
+      description: Updates an existing customer address by ID.
+      security:
+        - customerSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+      responses:
+        "200":
+          description: Address updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # --------------------------------------------------------------------------
+  # Wishlist (requires customer session)
+  # --------------------------------------------------------------------------
+
+  /api/customer/wishlist:
+    get:
+      operationId: listWishlistItems
+      tags: [Wishlist]
+      summary: List wishlist items
+      description: Returns all active wishlist items for the authenticated customer. Inactive products are automatically pruned.
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: Wishlist item collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WishlistItem"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+    post:
+      operationId: toggleWishlistItem
+      tags: [Wishlist]
+      summary: Add product to wishlist (toggle)
+      description: |
+        Adds a product to the wishlist. If the product is already in the wishlist it is **removed** (toggle behaviour).
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product_id
+              properties:
+                product_id:
+                  type: integer
+                  example: 42
+      responses:
+        "200":
+          description: Product added or removed from wishlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/customer/wishlist/{id}/move-to-cart:
+    post:
+      operationId: moveWishlistItemToCart
+      tags: [Wishlist]
+      summary: Move wishlist item to cart
+      description: Moves a wishlist item into the cart. For configurable products that need option selection, a redirect URL is returned instead.
+      security:
+        - customerSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 5
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                  default: 1
+      responses:
+        "200":
+          description: Item moved to cart, or redirect required for configurable product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect:
+                    type: boolean
+                    example: false
+                  data:
+                    description: Updated wishlist + cart when redirect is false; redirect URL string when redirect is true
+                  message:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/customer/wishlist/{id}:
+    delete:
+      operationId: removeWishlistItem
+      tags: [Wishlist]
+      summary: Remove wishlist item
+      description: Removes a specific item from the authenticated customer's wishlist.
+      security:
+        - customerSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 5
+      responses:
+        "200":
+          description: Item removed; returns updated wishlist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WishlistItem"
+                  message:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/customer/wishlist/all:
+    delete:
+      operationId: clearWishlist
+      tags: [Wishlist]
+      summary: Clear wishlist
+      description: Removes all items from the authenticated customer's wishlist.
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: Wishlist cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
