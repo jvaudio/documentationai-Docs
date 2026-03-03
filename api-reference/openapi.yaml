@@ -4,7 +4,7 @@ info:
   title: AccordRx API
   version: "1.0.0"
   description: |
-    REST API for the AccordRx pharmaceutical marketplace.
+    REST API for the AccordRx pharmacy marketplace.
     Covers product search, catalog, cart, checkout, and customer account management.
 
     ## Authentication
