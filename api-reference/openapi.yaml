@@ -4,7 +4,7 @@ info:
   title: AccordRx API
   version: "1.0.0"
   description: |
-    REST API documentation for the AccordRx pharmacy marketplace.
+    REST API for the AccordRx pharmaceutical marketplace.
     Covers product search, catalog, cart, checkout, and customer account management.
 
     ## Authentication
@@ -360,6 +360,23 @@ components:
           type: string
           format: date-time
 
+    CategoryChild:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        name:
+          type: string
+          example: "Penicillins"
+        slug:
+          type: string
+          example: "penicillins"
+        image:
+          type: string
+          format: uri
+          nullable: true
+
     Category:
       type: object
       properties:
@@ -379,7 +396,7 @@ components:
         children:
           type: array
           items:
-            $ref: "#/components/schemas/Category"
+            $ref: "#/components/schemas/CategoryChild"
 
     Country:
       type: object
