@@ -1,0 +1,237 @@
+---
+title: Unified Accounts Manual Test Guide
+description: >-
+  This guide covers the end-to-end process for:
+
+  1. Creating the first pharmacy seller account as an admin.
+
+  2. Creating a second pharmacy seller account.
+
+  3. Linking both pharmacies to the same unified user so one login can access
+  both.
+
+  4. Verifying behavior in UI and with optional code-level checks.
+---
+<Callout kind="info" collapsed="false">
+  Assumptions
+
+  1. App base URL is `http://127.0.0.1:8000`.
+
+  2. Admin URL prefix is `admin` (if different, replace `/admin` below).
+
+  3. Unified Accounts package is installed and migrations are up to date.
+</Callout>
+
+## Code Preparation (One-Time)
+
+Run these commands in the project root directory:
+
+```bash
+php artisan migrate
+php artisan optimize:clear
+php artisan responsecache:clear
+php artisan view:clear
+```
+
+Confirm feature flags are enabled in .env (or config/accordrx-unified.php):
+
+```typescript
+ACCORDRX_UNIFIED_ENABLED=true
+ACCORDRX_UNIFIED_LOGIN_ENABLED=true
+ACCORDRX_UNIFIED_LEGACY_FORWARDING_ENABLED=true
+ACCORDRX_ACTIVE_PHARMACY_CONTEXT_ENABLED=true
+ACCORDRX_STORE_SELECTOR_ENABLED=true
+ACCORDRX_MEMBERS_ONLY_MARKETPLACE_ENABLED=true
+ACCORDRX_AUTO_CREATE_SHADOW_CUSTOMER=true
+```
+
+If you changed .env, run:
+
+```typescript
+php artisan optimize:clear
+```
+
+## Create Pharmacy #1 (Admin UI)
+
+1. Log in to admin.
+
+2. Open `Marketplace > Sellers` (`/admin/marketplace/sellers`).
+
+3. Create a new seller (root pharmacy seller). Use a real test email for the owner, for example `owner.primary@acme.test`.
+
+4. Fill required fields: `name`, `email`, `url`, `shop_title`, address fields, `phone`, `state`, `city`, `country`, `postcode`.
+
+5. Save seller.
+
+6. Open seller edit page and ensure:
+
+   1. Seller is approved (`is_approved=1`).
+
+   2. Seller is not suspended (`is_suspended=0`).
+
+   3. Seller has at least one channel assigned.
+
+## Bootstrap Unified Account for Pharmacy #1
+
+Choose one method.
+
+### Method A (UI, recommended):
+
+1. Open unified login page: `/auth/login`.
+
+2. Log in with Pharmacy #1 seller email + password.
+
+3. This provisions/loads the unified account and membership automatically.
+
+### Method B (Code):
+
+```typescript
+php artisan accordrx:unified-accounts:backfill
+```
+
+<Callout kind="success" collapsed="false">
+  Expected Result:
+
+  1. A `platform_accounts` row exists for Pharmacy #1 owner email.
+
+  2. A `platform_account_pharmacy_memberships` row exists for Pharmacy #1 root seller as `owner`.
+</Callout>
+
+## Create Pharmacy #2 (Admin UI)
+
+1. In admin, create another root seller in `Marketplace > Sellers`.
+
+2. Use a unique seller email and unique phone for Pharmacy #2 (do not reuse Pharmacy #1 seller email/phone).
+
+3. Save and open edit page.
+
+4. Ensure approved, unsuspended, and channel assigned.
+
+<Callout kind="alert" collapsed="false">
+  Important:
+
+  Keep Pharmacy #2 as a root seller (`parent_id` must be `null`) for owner-level pharmacy membership linking.
+</Callout>
+
+## Link Pharmacy #2 to the Same Unified User
+
+Method A (UI, recommended):
+
+1. In admin, open Pharmacy #2 seller edit page.
+
+2. In the `Unified Account` card, click `Attach to Unified Account`.
+
+3. On `/admin/marketplace/sellers/attach-unified-account/{sellerId}`:
+
+4. `Platform Account Email or ID`: enter Pharmacy #1 unified account email (example `owner.primary@acme.test`) or its account ID.
+
+5. `Membership Role`: choose `Owner`.
+
+6. `Actor Seller ID`: leave blank for owner role.
+
+7. Submit.
+
+<Callout kind="success" collapsed="false">
+  Expected Result:
+
+  1. Redirect back to seller edit with success message `Unified account attached: ...`.
+
+  2. Membership list on the attach page shows the unified account email linked to Pharmacy #2.
+</Callout>
+
+### Method B (Code):
+
+```bash wrap="true"
+php artisan accordrx:unified-accounts:attach-pharmacy owner.primary@acme.test <PHARMACY_2_SELLER_ID> --role=owner
+```
+
+## Verify One Login Can Access Both Pharmacies
+
+1. Log out.
+
+2. Log in at `/auth/login` using the unified account credentials (the same credentials used for Pharmacy #1 bootstrap).
+
+3. Open `Unified Account` from header or go to `/account?mode=seller`.
+
+4. Confirm both pharmacies appear in memberships/summaries.
+
+5. Use the pharmacy switcher (header/store selector) to switch between Pharmacy #1 and Pharmacy #2.
+
+6. Open seller surfaces and ensure context switches correctly:
+
+7. `/account?mode=seller`
+
+8. `/account/reports?mode=seller`
+
+9. `/account/messages?mode=seller`
+
+10. Product details page (example): `/molestiae-excepturi-vitae-quia-voluptates-ad-et`
+
+<Callout kind="success" collapsed="false">
+  Expected Result:
+
+  1. No redirect loop to `/auth/login` while seller is authenticated.
+
+  2. No `Route [login] not defined` error.
+
+  3. Active pharmacy context updates when switching.
+</Callout>
+
+## Admin Impersonation Validation (Optional - Recommended)
+
+1. Admin > `Marketplace > Sellers`.
+
+2. Click `Login as Seller` for Pharmacy #1.
+
+3. Open `Unified Account` from seller header.
+
+4. Repeat for Pharmacy #2.
+
+<Callout kind="success" collapsed="false">
+  Expected Result:
+
+  1. Seller remains authenticated across requests.
+
+  2. Unified account shell loads without auth errors.
+</Callout>
+
+## Optional Code-Level Verification Queries
+
+Check unified account and memberships:
+
+```bash wrap="true"
+php artisan tinker --execute="
+
+\$account = \Custom\UnifiedAccounts\Models\PlatformAccount::where('email', 'owner.primary@acme.test')->first();
+
+echo 'account_id='.\$account?->id.PHP_EOL;
+
+echo 'memberships='. \Custom\UnifiedAccounts\Models\PlatformAccountPharmacyMembership::where('platform_account_id', \$account?->id)->count().PHP_EOL;
+
+\Custom\UnifiedAccounts\Models\PlatformAccountPharmacyMembership::where('platform_account_id', \$account?->id)->get(['pharmacy_seller_id','actor_seller_id','role_key','membership_status'])->each(fn(\$m) => print_r(\$m->toArray()));
+
+"
+```
+
+## Troubleshooting
+
+If UI changes or auth behavior look stale:
+
+```bash
+php artisan optimize:clear
+php artisan responsecache:clear
+php artisan view:clear
+```
+
+If unified login cannot find the account:
+
+1. Ensure Pharmacy #1 bootstrap happened (login once via `/auth/login` or run backfill).
+
+2. Re-open attach page and re-submit using the exact unified email or numeric account ID.
+
+If attach fails for Pharmacy #2:
+
+1. Ensure Pharmacy #2 seller is a root seller (not a child seller).
+
+2. For non-owner roles, provide a valid actor seller belonging to that pharmacy.
+

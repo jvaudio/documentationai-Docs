@@ -55,6 +55,23 @@
                 "icon": "settings"
               }
             ]
+          },
+          {
+            "group": "Admin Documentation",
+            "pages": [
+              {
+                "group": "Testing",
+                "pages": [
+                  {
+                    "title": "Unified Accounts Testing",
+                    "path": "unified-accounts-testing",
+                    "icon": "users"
+                  }
+                ],
+                "icon": "lucide-test-tube2"
+              }
+            ],
+            "icon": "columns-settings"
           }
         ]
       },
