@@ -77,6 +77,11 @@
             "group": "Dashboards and Reports",
             "pages": [
               {
+                "title": "Buyer Member Dashboard Documentation",
+                "path": "buyer-member-dashboard-documentation",
+                "icon": "chart-no-axes-column"
+              },
+              {
                 "title": "Main Member Dashboard",
                 "path": "main-member-dashboard",
                 "icon": "bar-chart3"
