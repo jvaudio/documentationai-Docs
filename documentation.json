@@ -72,6 +72,17 @@
               }
             ],
             "icon": "columns-settings"
+          },
+          {
+            "group": "Dashboards and Reports",
+            "pages": [
+              {
+                "title": "Main Member Dashboard",
+                "path": "main-member-dashboard",
+                "icon": "bar-chart3"
+              }
+            ],
+            "icon": "area-chart"
           }
         ]
       },
