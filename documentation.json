@@ -158,5 +158,9 @@
         ]
       }
     ]
-  }
+  },
+  "template": "classic",
+  "favicon": "https://blob-cdn.documentation.ai/org-922d0feb-d324-4778-b2c5-2bc3fb9fb912/doc-6d4a8bb3-33de-462c-9305-ac186f490dcb/1776570038774-tpzfjrr1pzg-AccordRx_favicon.png?fm=auto&auto=compress%2Cformat",
+  "logo-light": "https://blob-cdn.documentation.ai/org-922d0feb-d324-4778-b2c5-2bc3fb9fb912/doc-6d4a8bb3-33de-462c-9305-ac186f490dcb/1776570038774-tpzfjrr1pzg-AccordRx_favicon.png?fm=auto&auto=compress%2Cformat",
+  "logo-dark": "https://blob-cdn.documentation.ai/org-922d0feb-d324-4778-b2c5-2bc3fb9fb912/doc-6d4a8bb3-33de-462c-9305-ac186f490dcb/1776570038774-tpzfjrr1pzg-AccordRx_favicon.png?fm=auto&auto=compress%2Cformat"
 }
